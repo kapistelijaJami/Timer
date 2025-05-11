@@ -1,0 +1,2 @@
+# Timer Library
+Simple timer library where you can use it as a stopwatch to render a timer or do performance analysis easily. It also has DurationFormat class to format Duration object to format of your choosing, and can parse strings to a Duration from a format of your choosing.
