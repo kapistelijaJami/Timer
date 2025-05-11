@@ -8,12 +8,14 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.TimeZone;
 
+
+//TODO: Has extra code after changing things. Clean it up.
 public class DurationFormat {
 	public enum TimePart {
 		MILLISECONDS, SECONDS, MINUTES, HOURS;
 	}
 	
-	private boolean hours = false, minutes = false, seconds = false, milliseconds = false;
+	private boolean hasHours = false, hasMinutes = false, hasSeconds = false, hasMilliseconds = false;
 	private int hoursDigits, minutesDigits, secondsDigits, millisecondsDigits; //kaikki oli alus 2, poistin defaultit
 	private ArrayList<Character> delims = new ArrayList<>();
 	
@@ -33,27 +35,23 @@ public class DurationFormat {
 			}
 		}
 		
-		/*for (Character c : splitters) {
-			System.out.println(c);
-		}*/
-		
 		String[] parts = format.split("[" + possibleDelims + "]+", -1);
 		
 		for (String part : parts) {
 			if (part.toLowerCase().contains("h")) {
-				hours = true;
+				hasHours = true;
 				hoursDigits = part.length();
 			}
 			if (part.toLowerCase().contains("m")) {
-				minutes = true;
+				hasMinutes = true;
 				minutesDigits = part.length();
 			}
 			if (part.toLowerCase().contains("s")) {
-				seconds = true;
+				hasSeconds = true;
 				secondsDigits = part.length();
 			}
 			if (part.toLowerCase().contains("l")) {
-				milliseconds = true;
+				hasMilliseconds = true;
 				millisecondsDigits = part.length();
 			}
 		}
@@ -62,10 +60,14 @@ public class DurationFormat {
 	}
 	
 	public DurationFormat(boolean hours, boolean minutes, boolean seconds, boolean milliseconds) {
-		this.hours = hours;
-		this.minutes = minutes;
-		this.seconds = seconds;
-		this.milliseconds = milliseconds;
+		this.hasHours = hours;
+		this.hasMinutes = minutes;
+		this.hasSeconds = seconds;
+		this.hasMilliseconds = milliseconds;
+	}
+	
+	public static DurationFormat getDefault() {
+		return new DurationFormat("hh:mm:ss.lll");
 	}
 	
 	/**
@@ -116,13 +118,13 @@ public class DurationFormat {
 	private String getTimePartString(TimePart part) {
 		switch (part) {
 			case HOURS:
-				return hours ? repeatChar('h', hoursDigits) + (minutesDigits == 0 ? "" : ":") : "";
+				return hasHours ? repeatChar('h', hoursDigits) + (minutesDigits == 0 ? "" : ":") : "";
 			case MINUTES:
-				return minutes ? repeatChar('m', minutesDigits) + (secondsDigits == 0 ? "" : ":") : "";
+				return hasMinutes ? repeatChar('m', minutesDigits) + (secondsDigits == 0 ? "" : ":") : "";
 			case SECONDS:
-				return seconds ? repeatChar('s', secondsDigits) + (millisecondsDigits == 0 ? "" : ".") : "";
+				return hasSeconds ? repeatChar('s', secondsDigits) + (millisecondsDigits == 0 ? "" : ".") : "";
 			case MILLISECONDS:
-				return milliseconds ? repeatChar('l', millisecondsDigits) : "";
+				return hasMilliseconds ? repeatChar('l', millisecondsDigits) : "";
 		}
 		return "";
 	}
@@ -138,21 +140,21 @@ public class DurationFormat {
 	private void fixDelims() {
 		ArrayList<Character> newDelims = new ArrayList<>();
 		
-		if (hours) {
+		if (hasHours) {
 			newDelims.add(delims.get(0));
 			delims.remove(0);
 		} else {
 			newDelims.add(null);
 		}
 		
-		if (minutes) {
+		if (hasMinutes) {
 			newDelims.add(delims.get(0));
 			delims.remove(0);
 		} else {
 			newDelims.add(null);
 		}
 		
-		if (seconds && milliseconds) {
+		if (hasSeconds && hasMilliseconds) {
 			newDelims.add(delims.get(0));
 			delims.remove(0);
 		} else {
@@ -163,7 +165,7 @@ public class DurationFormat {
 	}
 	
 	public String format(Duration dur) {
-		String h = getFormattedTimePart(dur.toHoursPart(), TimePart.HOURS);
+		String h = getFormattedTimePart(dur.toHoursPart(), TimePart.HOURS); //TODO: should this be dur.toHours() instead so if it goes over 24h it includes the rest?
 		String m = getFormattedTimePart(dur.toMinutesPart(), TimePart.MINUTES);
 		String s = getFormattedTimePart(dur.toSecondsPart(), TimePart.SECONDS);
 		String mill = getFormattedTimePart(dur.toMillisPart(), TimePart.MILLISECONDS);
@@ -192,7 +194,7 @@ public class DurationFormat {
 				break;
 			case SECONDS:
 				if (delims.get(2) == null) {
-					return "";
+					return preZeros(num, secondsDigits);
 				}
 				endingChar = "" + delims.get(2);
 				numS = preZeros(num, secondsDigits);
@@ -212,8 +214,31 @@ public class DurationFormat {
 	 * @return 
 	 */
 	public Duration parse(String dur) { //format "hh:mm:ss.lll" or "hh:mm:ss,lll" etc
+		dur = dur.replaceAll(",", "."); //will be "hh:mm:ss.lll" after (will include seconds, might not include others)
+		
+		String[] parts = dur.split(":", -1);
+		String[] secAndMs = parts[parts.length - 1].split("\\.");
+		int seconds = Integer.parseInt(secAndMs[0]);
+		int milliseconds = secAndMs.length == 2 ? Integer.parseInt(secAndMs[1]) : 0;
+		int hours = 0;
+		int minutes = 0;
+		
+		if (parts.length == 3) { //has hours and minutes
+			hours = Integer.parseInt(parts[0]);
+			minutes = Integer.parseInt(parts[1]);
+		} else if (parts.length == 2) { //has minutes, but not hours
+			minutes = Integer.parseInt(parts[0]);
+		}
+		
+		long resultMillis = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds;
+		
+		return Duration.ofMillis(resultMillis);
+		
+		
+		
+		/* Old way (didn't work for over 12h):
 		try {
-			DateFormat f = new SimpleDateFormat(toString().replaceAll("l", "S").replaceAll(",", ".")); //milliseconds are represented with S in SimpleDateFormat
+			/*DateFormat f = new SimpleDateFormat(toString().replaceAll("l", "S").replaceAll(",", ".")); //milliseconds are represented with S in SimpleDateFormat
 			f.setTimeZone(TimeZone.getTimeZone("GMT"));
 			Date d = f.parse(dur.replaceAll(",", ".")); //Also they have to use . for separating them
 			
@@ -222,7 +247,7 @@ public class DurationFormat {
 			System.err.println(e.getMessage());
 		}
 		
-		return null;
+		return null;*/
 	}
 	
 	/**
@@ -237,5 +262,34 @@ public class DurationFormat {
 	
 	private static String preZeros(int i, int numberOfDigits) {
 		return String.format("%0" + numberOfDigits + "d", i);
+	}
+	
+	//Formats the duration to 1h 15m 34s format. Includes only the largest non-zero unit and smaller.
+	public static String formatWithUnits(Duration dur) {
+		return formatWithUnits(dur, false);
+	}
+	
+	//Formats the duration to 1h 15m 34s format. Includes only the largest non-zero unit and smaller.
+	public static String formatWithUnits(Duration dur, boolean includeMillis) {
+		String res = "";
+		if (dur.toHours() != 0) {
+			res += dur.toHours() + "h ";
+		}
+		
+		if (dur.toMinutes() != 0) {
+			res += dur.toMinutesPart() + "m ";
+		}
+		
+		if (dur.toSeconds() != 0) {
+			res += dur.toSecondsPart() + "s";
+		}
+		
+		if (includeMillis) {
+			if (dur.toMillis() != 0) {
+				res += " " + dur.toMillisPart() + "ms";
+			}
+		}
+		
+		return res;
 	}
 }

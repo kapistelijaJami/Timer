@@ -7,6 +7,7 @@ import java.time.Duration;
  * You can start, pause and unpause the timer.
  * Timer also starts automatically when you create the object.
  * You can just start the timer again multiple times, no stop method needed.
+ * Use the time -method to see what the time of the timer is.
  */
 public class Timer {
 	public enum Type {
@@ -17,6 +18,7 @@ public class Timer {
 	private long timeStart;
 	private long pauseStart;
 	private long pauseTotal = 0;
+	private long offset = 0;
 	private boolean paused = false;
 	
 	public Timer() {
@@ -28,14 +30,34 @@ public class Timer {
 		timeStart = getCurrentTime(); //if doesn't want to call start separately
 	}
 	
+	public Timer(Type type, long startTime) {
+		this.type = type;
+		timeStart = getCurrentTime() - startTime; //if doesn't want to call start separately
+	}
+	
 	public Type getType() {
 		return type;
 	}
 	
 	public void start() {
-		timeStart = getCurrentTime();
+		start(0);
+	}
+	
+	public void start(long startTime) {
+		timeStart = getCurrentTime() - startTime;
 		pauseTotal = 0;
+		offset = 0;
 		paused = false;
+	}
+	
+	public void startPaused() {
+		start();
+		pause();
+	}
+	
+	public void startPaused(long startTime) {
+		start(startTime);
+		pause();
 	}
 	
 	public void pause() {
@@ -53,11 +75,15 @@ public class Timer {
 		}
 	}
 	
+	public boolean isPaused() {
+		return paused;
+	}
+	
 	public long time() {
 		if (paused) {
-			return timeBetween(timeStart, pauseStart) - pauseTotal; //pauseTotal hasn't been updated yet, so we cant use currentTime
+			return timeBetween(timeStart, pauseStart) - pauseTotal + offset; //pauseTotal hasn't been updated yet, so we cant use currentTime
 		}
-		return timeSince(timeStart) - pauseTotal;
+		return timeSince(timeStart) - pauseTotal + offset;
 	}
 	
 	public Duration timeAsDuration() {
@@ -82,5 +108,12 @@ public class Timer {
 	
 	private long timeBetween(long first, long second) {
 		return second - first;
+	}
+
+	public void skip(long amount) {
+		offset += amount;
+		if (time() < 0) {
+			start(0);
+		}
 	}
 }
